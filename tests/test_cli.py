@@ -83,3 +83,22 @@ def test_planilha_ausente_da_erro_claro(custos_xlsx, tmp_path, capsys):
     )
     assert codigo == 1
     assert "nao encontrada" in capsys.readouterr().err
+
+
+def test_pendencias_preenchidas_voltam_na_rodada_seguinte(
+    promo_ml_xlsx, custos_xlsx, tmp_path, capsys
+):
+    """O ciclo completo: rodar, preencher o que faltava, rodar de novo."""
+    saida = tmp_path / "saida"
+    main(["aplicar", str(promo_ml_xlsx), "--custos", str(custos_xlsx), "--saida", str(saida)])
+    primeira = _participando(capsys.readouterr().out)
+
+    pendencias = saida / f"{promo_ml_xlsx.stem}-pendencias.csv"
+    linhas = pendencias.read_text(encoding="utf-8-sig").splitlines()
+    pendencias.write_text("\n".join([linhas[0]] + [l + "60,00" for l in linhas[1:]]), encoding="utf-8")
+
+    main(["aplicar", str(promo_ml_xlsx), "--custos", str(custos_xlsx), str(pendencias),
+          "--saida", str(saida)])
+    texto = capsys.readouterr().out
+    assert _participando(texto) > primeira
+    assert "por falta de custo ........... 0" in texto

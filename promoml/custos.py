@@ -10,6 +10,7 @@ mesma rodada.
 from __future__ import annotations
 
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from decimal import Decimal
 from pathlib import Path
@@ -234,9 +235,35 @@ def escolher_aba(caminho: Path, aba: str | None) -> str | None:
 
 
 def carregar_custos(
-    caminho: str | Path, regras: Regras | None = None, aba: str | None = None
+    caminhos: str | Path | Sequence[str | Path],
+    regras: Regras | None = None,
+    aba: str | None = None,
 ) -> TabelaDeCustos:
-    """Le o arquivo de custos e devolve o indice pronto para consulta."""
+    """Le uma ou varias tabelas de custo e devolve o indice pronto para consulta.
+
+    Com mais de um arquivo, os ultimos tem prioridade: e assim que o arquivo de
+    pendencias preenchido **completa** a planilha de precificacao em vez de
+    substituir ela, e que uma correcao pontual vence o valor antigo.
+    """
+    lista = [caminhos] if isinstance(caminhos, (str, Path)) else list(caminhos)
+    if not lista:
+        raise ValueError("nenhuma tabela de custos informada")
+
+    tabelas = [_carregar_uma(Path(c), regras, aba) for c in lista]
+    if len(tabelas) == 1:
+        return tabelas[0]
+
+    # Ultimo arquivo primeiro: o indice guarda a primeira ocorrencia de cada chave.
+    itens, avisos, campos = [], [], {}
+    for tabela in reversed(tabelas):
+        itens.extend(tabela.itens)
+    for tabela in tabelas:
+        avisos.extend(tabela.avisos)
+        campos.update(tabela.campos)
+    return TabelaDeCustos(itens, avisos, campos)
+
+
+def _carregar_uma(caminho: Path, regras: Regras | None, aba: str | None) -> TabelaDeCustos:
     from .planilha import abrir
 
     caminho = Path(caminho)

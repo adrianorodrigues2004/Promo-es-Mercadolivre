@@ -34,7 +34,12 @@ def montar_parser() -> argparse.ArgumentParser:
 
     aplicar = sub.add_parser("aplicar", help="decide a planilha e grava a copia preenchida")
     aplicar.add_argument("planilha", type=Path, help="export de promocoes do Mercado Livre")
-    aplicar.add_argument("--custos", type=Path, help=f"tabela de custos (padrao: {CUSTOS_PADRAO})")
+    aplicar.add_argument(
+        "--custos",
+        type=Path,
+        nargs="+",
+        help=f"uma ou mais tabelas de custo, as ultimas tem prioridade (padrao: {CUSTOS_PADRAO})",
+    )
     aplicar.add_argument("--regras", type=Path, help=f"arquivo de regras (padrao: {REGRAS_PADRAO})")
     aplicar.add_argument("--saida", type=Path, default=Path("saida"), help="pasta de saida")
     aplicar.add_argument("--aba", help="aba da planilha de promocoes")
@@ -54,7 +59,7 @@ def montar_parser() -> argparse.ArgumentParser:
         "conferir", help="mostra colunas detectadas sem decidir nada (use antes da primeira rodada)"
     )
     conferir.add_argument("planilha", type=Path)
-    conferir.add_argument("--custos", type=Path)
+    conferir.add_argument("--custos", type=Path, nargs="+")
     conferir.add_argument("--regras", type=Path)
     conferir.add_argument("--aba")
     conferir.add_argument("--aba-custos")
@@ -79,19 +84,23 @@ def _regras_do_argv(args) -> Regras:
     return regras_de_dict({k: v for k, v in ajustes.items() if v is not None}, base=regras)
 
 
-def _caminho_custos(args) -> Path:
-    caminho = args.custos or CUSTOS_PADRAO
-    if not Path(caminho).exists():
-        raise FileNotFoundError(
-            f"tabela de custos nao encontrada em '{caminho}'. "
-            "Informe com --custos ou salve o arquivo em config/custos.xlsx"
-        )
-    return Path(caminho)
+def _caminhos_custos(args) -> list[Path]:
+    """Tabelas de custo a usar; as ultimas completam e corrigem as primeiras."""
+    caminhos = args.custos or [CUSTOS_PADRAO]
+    if isinstance(caminhos, (str, Path)):
+        caminhos = [caminhos]
+    for caminho in caminhos:
+        if not Path(caminho).exists():
+            raise FileNotFoundError(
+                f"tabela de custos nao encontrada em '{caminho}'. "
+                "Informe com --custos ou salve o arquivo em config/custos.xlsx"
+            )
+    return [Path(c) for c in caminhos]
 
 
 def comando_aplicar(args) -> int:
     regras = _regras_do_argv(args)
-    custos = carregar_custos(_caminho_custos(args), regras, aba=args.aba_custos)
+    custos = carregar_custos(_caminhos_custos(args), regras, aba=args.aba_custos)
     for aviso in custos.avisos[:10]:
         print(f"  custos: {aviso}", file=sys.stderr)
 
@@ -138,10 +147,10 @@ def comando_conferir(args) -> int:
     if nao_usadas:
         print(f"  colunas ignoradas: {nao_usadas}")
 
-    caminho = args.custos or CUSTOS_PADRAO
-    if Path(caminho).exists():
-        custos = carregar_custos(caminho, regras, aba=args.aba_custos)
-        print(f"\ntabela de custos: {caminho}")
+    caminhos = args.custos or [CUSTOS_PADRAO]
+    if all(Path(c).exists() for c in caminhos):
+        custos = carregar_custos(caminhos, regras, aba=args.aba_custos)
+        print(f"\ntabela de custos: {', '.join(str(c) for c in caminhos)}")
         print(f"  linhas com custo ....... {len(custos)}")
         print("  colunas reconhecidas:")
         for campo, nome in sorted(custos.campos.items()):
@@ -149,7 +158,8 @@ def comando_conferir(args) -> int:
         for aviso in custos.avisos[:10]:
             print(f"  aviso: {aviso}")
     else:
-        print(f"\ntabela de custos nao encontrada em '{caminho}'")
+        faltando = [str(c) for c in caminhos if not Path(c).exists()]
+        print(f"\ntabela de custos nao encontrada em: {', '.join(faltando)}")
 
     print(f"\nregras em uso:")
     print(f"  imposto ................ {formatar(regras.imposto_pct * 100)}%")

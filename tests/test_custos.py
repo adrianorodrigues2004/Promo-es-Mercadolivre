@@ -90,3 +90,32 @@ def test_arquivo_sem_coluna_de_custo_falha_com_mensagem_util(tmp_path):
     caminho.write_text("produto;preco\nmesa;10\n", encoding="utf-8")
     with pytest.raises(ValueError, match="coluna de custo"):
         carregar_custos(caminho)
+
+
+def test_varias_tabelas_se_completam(custos_xlsx, tmp_path):
+    """O arquivo de pendencias preenchido soma a tabela principal, nao a troca."""
+    complemento = tmp_path / "pendencias.csv"
+    complemento.write_text(
+        "mlb;sku;titulo;preco_atual;preco_proposto_ml;custo\n"
+        "MLB9999999999;SKU-Z;Produto Desconhecido;300,00;250,00;90,00\n",
+        encoding="utf-8",
+    )
+    tabela = carregar_custos([custos_xlsx, complemento])
+
+    novo, _ = tabela.buscar(id_anuncio="MLB9999999999")
+    antigo, _ = tabela.buscar(id_anuncio="MLB4000000001")
+    assert novo.custo == Decimal("90.00")     # veio do complemento
+    assert antigo.custo == Decimal("100")     # continua valendo
+
+
+def test_tabela_mais_nova_corrige_a_anterior(custos_xlsx, tmp_path):
+    correcao = tmp_path / "correcao.csv"
+    correcao.write_text("mlb;custo\n4000000001;123,45\n", encoding="utf-8")
+    tabela = carregar_custos([custos_xlsx, correcao])
+    custo, _ = tabela.buscar(id_anuncio="MLB4000000001")
+    assert custo.custo == Decimal("123.45")
+
+
+def test_lista_vazia_de_tabelas_e_recusada():
+    with pytest.raises(ValueError, match="nenhuma tabela"):
+        carregar_custos([])

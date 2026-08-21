@@ -48,18 +48,25 @@ def criar_app(custos_padrao: Path, regras: Regras) -> Flask:
         pasta.mkdir(parents=True)
         try:
             planilha = _guardar(enviado, pasta)
+
             enviado_custos = request.files.get("custos")
             if enviado_custos and enviado_custos.filename:
-                caminho_custos = _guardar(enviado_custos, pasta)
+                tabelas = [_guardar(enviado_custos, pasta)]
             elif Path(custos_padrao).exists():
-                caminho_custos = Path(custos_padrao)
+                tabelas = [Path(custos_padrao)]
             else:
                 return _erro(
                     "Nenhuma tabela de custos disponivel: envie uma ou salve em "
                     f"'{custos_padrao}'."
                 )
 
-            custos = carregar_custos(caminho_custos, regras)
+            # Os complementos entram depois: completam a tabela principal e,
+            # em caso de repeticao, o valor mais novo prevalece.
+            for complemento in request.files.getlist("complementos"):
+                if complemento and complemento.filename:
+                    tabelas.append(_guardar(complemento, pasta))
+
+            custos = carregar_custos(tabelas, regras)
             rodada = processar(planilha, custos, regras)
         except (FileNotFoundError, ValueError, FormatoNaoSuportado) as erro:
             return _erro(str(erro))
@@ -169,6 +176,13 @@ anuncio e devolve a planilha pronta para reenviar.</p>
   <p class="dica">
   {% if tem_custos %}Sem enviar nada, uso <code>{{ custos }}</code>.
   {% else %}Nenhuma tabela salva ainda - envie a sua planilha de precificacao.{% endif %}</p>
+
+  <label for="complementos">Custos que faltavam (opcional)</label>
+  <input id="complementos" type="file" name="complementos" multiple
+         accept=".xlsx,.xlsm,.csv,.tsv,.txt">
+  <p class="dica">E aqui que entra o arquivo de <strong>pendencias</strong> depois de
+  preenchido. Ele <strong>completa</strong> a tabela acima, nao substitui - os anuncios
+  que ja tinham custo continuam valendo. Da para enviar mais de um arquivo.</p>
 
   <button type="submit">Aplicar promocoes</button>
   <div class="regras">

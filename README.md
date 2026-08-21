@@ -142,15 +142,25 @@ MLB, por SKU e pelo **preço atual do anúncio** (que se mostrou exato nos teste
 com seus dados: 23 de 23 acertos). Quando dois produtos têm o mesmo preço e
 custos diferentes, ele prefere **não casar** a arriscar o custo errado.
 
-Para resolver: abra `saida/...-pendencias.csv`, preencha a coluna `custo` e use
-o arquivo na rodada seguinte:
+Para resolver: abra `saida/...-pendencias.csv`, preencha a coluna `custo` e,
+na rodada seguinte, envie o arquivo no campo **"Custos que faltavam"** da
+página — o segundo campo de arquivo, logo abaixo da tabela de custos.
+
+Esse campo **soma** à sua tabela principal, não substitui: os anúncios que já
+tinham custo continuam valendo. Dá para acumular vários arquivos ali, e em caso
+de repetição o valor mais novo prevalece.
+
+Pelo terminal é a mesma ideia — vários arquivos em `--custos`, os últimos com
+prioridade:
 
 ```bash
-python3 -m promoml aplicar "sua-planilha.xlsx" --custos saida/...-pendencias.csv
+python3 -m promoml aplicar "sua-planilha.xlsx" \
+    --custos config/custos.xlsx saida/...-pendencias.csv
 ```
 
-Melhor ainda: preencha a coluna `Código` desses anúncios na sua planilha de
-precificação — aí eles passam a casar por MLB para sempre.
+Melhor ainda, para não repetir isso todo mês: preencha a coluna `Código` desses
+anúncios na sua planilha de precificação — aí eles passam a casar por MLB para
+sempre.
 
 ---
 
