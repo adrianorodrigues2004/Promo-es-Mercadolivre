@@ -10,6 +10,8 @@ saida/
 # Dados reais: custos e planilhas de campanha ficam fora do controle de versao
 config/custos.xlsx
 config/custos.csv
+config/custos-extras/*
+!config/custos-extras/LEIA-ME.txt
 exemplos/*.xlsx
 exemplos/*.csv
 !exemplos/README.md

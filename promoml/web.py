@@ -15,7 +15,7 @@ from pathlib import Path
 
 from flask import Flask, abort, redirect, render_template_string, request, send_file, url_for
 
-from .custos import carregar_custos
+from .custos import PASTA_EXTRAS, carregar_custos, descobrir_tabelas
 from .motor import processar
 from .planilha import EXTENSOES_EXCEL, EXTENSOES_TEXTO, FormatoNaoSuportado
 from .regras import Regras
@@ -33,10 +33,18 @@ def criar_app(custos_padrao: Path, regras: Regras) -> Flask:
 
     @app.get("/")
     def inicio():
-        existe = Path(custos_padrao).exists()
-        return render_template_string(
-            PAGINA_ENVIO, custos=custos_padrao, tem_custos=existe, regras=regras
-        )
+        return render_template_string(PAGINA_ENVIO, **_contexto())
+
+    def _contexto(**extra):
+        guardados = [c.name for c in descobrir_tabelas(custos_padrao)[1:]]
+        return {
+            "custos": custos_padrao,
+            "tem_custos": Path(custos_padrao).exists(),
+            "regras": regras,
+            "pasta_extras": PASTA_EXTRAS,
+            "guardados": guardados,
+            **extra,
+        }
 
     @app.post("/aplicar")
     def aplicar():
@@ -53,7 +61,9 @@ def criar_app(custos_padrao: Path, regras: Regras) -> Flask:
             if enviado_custos and enviado_custos.filename:
                 tabelas = [_guardar(enviado_custos, pasta)]
             elif Path(custos_padrao).exists():
-                tabelas = [Path(custos_padrao)]
+                # A tabela principal ja vem acompanhada do que estiver guardado
+                # em config/custos-extras/.
+                tabelas = descobrir_tabelas(custos_padrao)
             else:
                 return _erro(
                     "Nenhuma tabela de custos disponivel: envie uma ou salve em "
@@ -97,13 +107,7 @@ def criar_app(custos_padrao: Path, regras: Regras) -> Flask:
         return send_file(alvo, as_attachment=True)
 
     def _erro(mensagem: str):
-        return render_template_string(
-            PAGINA_ENVIO,
-            custos=custos_padrao,
-            tem_custos=Path(custos_padrao).exists(),
-            regras=regras,
-            erro=mensagem,
-        ), 400
+        return render_template_string(PAGINA_ENVIO, **_contexto(erro=mensagem)), 400
 
     return app
 
@@ -180,9 +184,17 @@ anuncio e devolve a planilha pronta para reenviar.</p>
   <label for="complementos">Custos que faltavam (opcional)</label>
   <input id="complementos" type="file" name="complementos" multiple
          accept=".xlsx,.xlsm,.csv,.tsv,.txt">
-  <p class="dica">E aqui que entra o arquivo de <strong>pendencias</strong> depois de
-  preenchido. Ele <strong>completa</strong> a tabela acima, nao substitui - os anuncios
-  que ja tinham custo continuam valendo. Da para enviar mais de um arquivo.</p>
+  <p class="dica">
+  {% if guardados %}
+    Ja entram sozinhos em toda rodada, de <code>{{ pasta_extras }}</code>:
+    <strong>{{ guardados|join(', ') }}</strong>.
+    Use este campo so para um arquivo avulso.
+  {% else %}
+    Aqui entra o arquivo de <strong>pendencias</strong> depois de preenchido - ele
+    completa a tabela acima, nao substitui.
+    <br><strong>Para nao precisar reenviar toda vez:</strong> guarde o arquivo em
+    <code>{{ pasta_extras }}</code> e ele passa a entrar sozinho.
+  {% endif %}</p>
 
   <button type="submit">Aplicar promocoes</button>
   <div class="regras">

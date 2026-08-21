@@ -57,6 +57,15 @@ PADROES_CUSTOS: dict[str, list[tuple[str, int]]] = {
 # Nomes de aba preferidos quando o arquivo de custos tem varias.
 _ABAS_PREFERIDAS = (r"mercado.?l[ií]vre", r"^ml$", r"^meli$")
 
+# Pasta onde ficam guardados os custos que completam a tabela principal - os
+# arquivos de pendencias ja preenchidos. Tudo que estiver ali entra sozinho em
+# toda rodada, sem precisar reenviar nada.
+PASTA_EXTRAS = Path("config/custos-extras")
+# Formatos de planilha, de proposito sem .txt: a pasta guarda tambem o arquivo
+# de instrucoes, que nao e tabela de custo nenhuma.
+_EXTENSOES_CUSTO = (".xlsx", ".xlsm", ".csv", ".tsv")
+_NOMES_IGNORADOS = ("leia-me", "leiame", "readme")
+
 _SOBRESCRITAS_PCT = ("comissao_pct", "imposto_pct", "margem_min_pct")
 _SOBRESCRITAS_VAL = ("frete", "taxa_fixa")
 # Encargos que descrevem o anuncio e viajam direto para ``Encargos``.
@@ -234,6 +243,29 @@ def escolher_aba(caminho: Path, aba: str | None) -> str | None:
     return None
 
 
+def descobrir_tabelas(
+    principal: str | Path, extras: str | Path | None = PASTA_EXTRAS
+) -> list[Path]:
+    """Tabela principal seguida dos complementos guardados na pasta de extras.
+
+    A ordem alfabetica decide quem vence uma repeticao: como os ultimos tem
+    prioridade, nomear os arquivos por data (``2026-08-pendencias.csv``) faz o
+    mais recente prevalecer naturalmente.
+    """
+    caminhos = [Path(principal)]
+    pasta = Path(extras) if extras else None
+    if pasta and pasta.is_dir():
+        caminhos.extend(
+            arquivo
+            for arquivo in sorted(pasta.iterdir())
+            if arquivo.is_file()
+            and not arquivo.name.startswith((".", "~$"))
+            and arquivo.stem.lower() not in _NOMES_IGNORADOS
+            and arquivo.suffix.lower() in _EXTENSOES_CUSTO
+        )
+    return caminhos
+
+
 def carregar_custos(
     caminhos: str | Path | Sequence[str | Path],
     regras: Regras | None = None,
@@ -249,12 +281,21 @@ def carregar_custos(
     if not lista:
         raise ValueError("nenhuma tabela de custos informada")
 
-    tabelas = [_carregar_uma(Path(c), regras, aba) for c in lista]
-    if len(tabelas) == 1:
-        return tabelas[0]
+    principal = _carregar_uma(Path(lista[0]), regras, aba)
+    if len(lista) == 1:
+        return principal
 
+    # Um complemento ilegivel nao pode derrubar a rodada inteira: vira aviso e a
+    # tabela principal segue valendo.
+    tabelas, problemas = [principal], []
+    for caminho in lista[1:]:
+        try:
+            tabelas.append(_carregar_uma(Path(caminho), regras, aba))
+        except (ValueError, FileNotFoundError) as erro:
+            problemas.append(f"{Path(caminho).name} ignorado: {erro}")
+
+    itens, avisos, campos = [], list(problemas), {}
     # Ultimo arquivo primeiro: o indice guarda a primeira ocorrencia de cada chave.
-    itens, avisos, campos = [], [], {}
     for tabela in reversed(tabelas):
         itens.extend(tabela.itens)
     for tabela in tabelas:

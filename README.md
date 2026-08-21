@@ -142,21 +142,35 @@ MLB, por SKU e pelo **preço atual do anúncio** (que se mostrou exato nos teste
 com seus dados: 23 de 23 acertos). Quando dois produtos têm o mesmo preço e
 custos diferentes, ele prefere **não casar** a arriscar o custo errado.
 
-Para resolver: abra `saida/...-pendencias.csv`, preencha a coluna `custo` e,
-na rodada seguinte, envie o arquivo no campo **"Custos que faltavam"** da
-página — o segundo campo de arquivo, logo abaixo da tabela de custos.
+Para resolver, uma vez só por anúncio:
 
-Esse campo **soma** à sua tabela principal, não substitui: os anúncios que já
-tinham custo continuam valendo. Dá para acumular vários arquivos ali, e em caso
-de repetição o valor mais novo prevalece.
+1. Abra `saida/...-pendencias.csv` e preencha a coluna `custo`.
+2. **Salve o arquivo em `config/custos-extras/`.**
 
-Pelo terminal é a mesma ideia — vários arquivos em `--custos`, os últimos com
-prioridade:
+Pronto. A partir daí ele entra sozinho em toda rodada — você não precisa
+reenviar nada pela página nunca mais. Pode acumular quantos arquivos quiser
+nessa pasta.
+
+Esses arquivos **somam** à sua tabela principal, não substituem: os anúncios
+que já tinham custo continuam valendo. Se o mesmo anúncio aparecer em dois
+arquivos, vale o último em ordem alfabética — por isso vale nomear por data:
+
+```
+config/custos-extras/
+    2026-08-pendencias.csv
+    2026-09-pendencias.csv     <- este corrige o anterior
+```
+
+O campo **"Custos que faltavam"** da página continua existindo, para um arquivo
+avulso que você não quer guardar. E pelo terminal dá para listar vários em
+`--custos`, os últimos com prioridade:
 
 ```bash
 python3 -m promoml aplicar "sua-planilha.xlsx" \
     --custos config/custos.xlsx saida/...-pendencias.csv
 ```
+
+Um arquivo ilegível nessa pasta vira aviso, não derruba a rodada.
 
 Melhor ainda, para não repetir isso todo mês: preencha a coluna `Código` desses
 anúncios na sua planilha de precificação — aí eles passam a casar por MLB para

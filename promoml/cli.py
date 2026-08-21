@@ -13,7 +13,7 @@ import warnings
 from pathlib import Path
 
 from . import __version__
-from .custos import carregar_custos
+from .custos import PASTA_EXTRAS, carregar_custos, descobrir_tabelas
 from .dinheiro import formatar
 from .motor import processar
 from .planilha import FormatoNaoSuportado
@@ -85,8 +85,12 @@ def _regras_do_argv(args) -> Regras:
 
 
 def _caminhos_custos(args) -> list[Path]:
-    """Tabelas de custo a usar; as ultimas completam e corrigem as primeiras."""
-    caminhos = args.custos or [CUSTOS_PADRAO]
+    """Tabelas de custo a usar; as ultimas completam e corrigem as primeiras.
+
+    Sem ``--custos``, usa a tabela padrao mais tudo que estiver guardado em
+    ``config/custos-extras/`` - os arquivos de pendencias ja preenchidos.
+    """
+    caminhos = args.custos or descobrir_tabelas(CUSTOS_PADRAO)
     if isinstance(caminhos, (str, Path)):
         caminhos = [caminhos]
     for caminho in caminhos:
@@ -147,7 +151,7 @@ def comando_conferir(args) -> int:
     if nao_usadas:
         print(f"  colunas ignoradas: {nao_usadas}")
 
-    caminhos = args.custos or [CUSTOS_PADRAO]
+    caminhos = args.custos or descobrir_tabelas(CUSTOS_PADRAO)
     if all(Path(c).exists() for c in caminhos):
         custos = carregar_custos(caminhos, regras, aba=args.aba_custos)
         print(f"\ntabela de custos: {', '.join(str(c) for c in caminhos)}")

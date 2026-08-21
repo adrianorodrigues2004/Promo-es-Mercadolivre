@@ -1,0 +1,17 @@
+Guarde aqui os custos que faltavam.
+==================================
+
+Toda vez que uma rodada termina, os anuncios sem custo saem num arquivo
+chamado "...-pendencias.csv". Preencha a coluna "custo" desse arquivo e
+salve ele NESTA PASTA.
+
+Pronto: a partir dai ele entra sozinho em toda rodada, sem voce precisar
+enviar nada pela pagina. Pode acumular quantos arquivos quiser aqui.
+
+Se o mesmo anuncio aparecer em dois arquivos, vale o que vier por ultimo em
+ordem alfabetica. Por isso vale a pena nomear por data:
+
+    2026-08-pendencias.csv
+    2026-09-pendencias.csv     <- este corrige o anterior
+
+Esta pasta aceita .xlsx, .csv e .tsv. Este arquivo de texto e ignorado.
