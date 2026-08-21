@@ -14,35 +14,43 @@ A regra é a que você definiu:
 
 ## Como usar
 
-### 1. Instalar
+### Preparar (uma vez só)
+
+**1. Instale o Python** — [python.org/downloads](https://www.python.org/downloads/).
+No Windows, marque **"Add Python to PATH"** na primeira tela do instalador.
+
+**2. Baixe esta pasta** e descompacte num lugar fácil, por exemplo
+`Documentos\promocoes`.
+
+**3. Coloque sua tabela de custos** em `config/custos.xlsx`. É a mesma planilha
+de precificação que você já usa (aba **Mercado Livre**, com as colunas
+`Produto`, `Código`, `Custo`, `Frete`, `Imposto`, `Taxa`, `Ribait`,
+`Preço Atual`). Não precisa reorganizar nada — o programa reconhece essas
+colunas sozinho.
+
+### Rodar (toda vez)
+
+**Clique duas vezes em `iniciar.bat`** (Windows) ou **`iniciar.sh`** (Mac).
+Ele instala o que falta na primeira vez e abre a página no navegador.
+
+Na página: arraste a planilha exportada do Mercado Livre, clique em
+**Aplicar promoções** e baixe o resultado. Deixe a janela preta aberta enquanto
+usa; feche-a para encerrar.
+
+O ciclo completo fica assim:
+
+```
+exporta do ML  →  arrasta na página  →  baixa a planilha pronta  →  reenvia ao ML
+```
+
+### Pelo terminal, se preferir
 
 ```bash
 pip install -r requirements.txt
-```
-
-### 2. Guardar sua tabela de custos
-
-Copie sua planilha de precificação para `config/custos.xlsx`. É a mesma que
-você já usa (aba **Mercado Livre**, com as colunas `Produto`, `Código`,
-`Custo`, `Frete`, `Imposto`, `Taxa`, `Ribait`, `Preço Atual`). Nada precisa ser
-reorganizado — o programa reconhece essas colunas sozinho.
-
-### 3. Rodar
-
-Pelo navegador, arrastando o arquivo:
-
-```bash
-python3 -m promoml web
-# abre em http://127.0.0.1:8000
-```
-
-Ou pelo terminal:
-
-```bash
 python3 -m promoml aplicar "1_O_melhor_de_todos_os_dias....xlsx"
 ```
 
-### 4. O que sai
+### O que sai
 
 Na pasta `saida/`:
 
