@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+
+# Saidas de cada rodada
+saida/
+
+# Dados reais: custos e planilhas de campanha ficam fora do controle de versao
+config/custos.xlsx
+config/custos.csv
+exemplos/*.xlsx
+exemplos/*.csv
+!exemplos/README.md

@@ -1,0 +1,44 @@
+# Regras que decidem se um anuncio entra ou nao na promocao.
+# Tudo aqui pode ser mudado sem mexer no codigo.
+
+# --- Encargos padrao -------------------------------------------------------
+# Valem quando a tabela de custos nao trouxer o valor daquele anuncio.
+# Na sua planilha de precificacao as colunas "Imposto", "Taxa", "Frete" e
+# "Ribait" ja preenchem isso anuncio a anuncio, e elas tem prioridade.
+imposto_pct: 11.5%        # imposto sobre a venda
+comissao_pct: 0%          # comissao do ML (a planilha traz: 11,5% ou 16,5%)
+frete: 0                  # frete por sua conta, em reais
+taxa_fixa: 0              # custo fixo por venda, em reais
+
+# --- Piso de rentabilidade -------------------------------------------------
+# Um anuncio so entra na promocao se o preco final atender as duas regras.
+margem_min_pct: 5%              # margem minima sobre o preco de venda
+limiar_preco_baixo: 150         # abaixo deste preco vale tambem a regra em reais
+lucro_min_abaixo_limiar: 10     # lucro minimo, em reais, abaixo do limiar
+lucro_min_acima_limiar: 0       # lucro minimo, em reais, acima do limiar
+
+# --- Como negociar ---------------------------------------------------------
+# sugerido       aceita a proposta do ML quando ela cabe na margem; quando nao
+#                cabe, contrapropoe o maior desconto que ainda cabe.
+# maior_desconto ignora a proposta e sempre desce ate o piso de margem.
+# so_proposta    nunca mexe no preco: so marca ou desmarca a participacao.
+estrategia: sugerido
+
+desconto_min_padrao_pct: 3%   # nao vale a pena contrapropor menos que isso
+passo_desconto_pp: 1          # descontos em numeros inteiros, como o ML usa
+arredondamento: centavo_acima # ou: real_acima, terminacao_90
+
+# --- Casamento com a tabela de custos --------------------------------------
+# Ordem de confianca. "titulo" fica de fora de proposito: nomes parecidos de
+# produtos diferentes ja causaram casamento errado nos testes com dados reais.
+metodos_casamento: [mlb, sku, preco]
+
+# Anuncio sem custo cadastrado fica de fora e vai para o arquivo de pendencias.
+participar_sem_custo: false
+
+# --- Ajuste manual de colunas ----------------------------------------------
+# So use se a deteccao automatica errar (confira com: promoml conferir).
+# colunas:
+#   preco_atual: "Preço original"
+#   custos:
+#     custo: "Custo"
