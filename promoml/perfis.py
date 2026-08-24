@@ -124,6 +124,10 @@ class PerfilGenerico:
             return None
         return Contraproposta(preco=centavos(preco), desconto_pct=pct_desconto(base, preco))
 
+    def ajuda_na_proposta(self, numero: int, regras: Regras) -> Decimal:
+        """Numa planilha comum nao ha ajuda ligada a proposta da campanha."""
+        return ZERO
+
     def escrever(self, numero: int, decisao, regras: Regras) -> None:
         """Preenche participacao e preco nas colunas nativas da planilha."""
         cap = self.capacidade(numero)
@@ -203,66 +207,56 @@ class PerfilML(PerfilGenerico):
         return Capacidade(editavel, sim, nao)
 
     def encargos(self, numero: int, custo: Custo, regras: Regras) -> Encargos:
-        """Encargos calibrados pelo "Você recebe" do proprio Mercado Livre.
+        """Comissao e frete do anuncio, pela fonte mais conservadora.
 
-        No preco proposto vale a identidade::
+        Ha duas medidas do mesmo encargo, e elas discordam:
 
-            recebe = preco - comissao - frete + reducao_de_tarifa
+        * a sua planilha, pelas colunas ``Taxa`` e ``Frete``;
+        * o Mercado Livre, pelo "Você recebe" - no preco proposto vale
+          ``recebe = preco - comissao - frete + reducao_de_tarifa``, e dai sai
+          ``comissao + frete`` de verdade.
 
-        Dai sai ``comissao + frete`` de verdade. A comissao percentual vem da
-        tabela de custos (Classico ou Premium) e o resto vira frete implicito -
-        que e o que o ML realmente cobra, sem depender de anotacao manual.
+        Nos dados reais o ML aparece mais barato que a planilha em 24 de 35
+        anuncios conferidos. Ficar com o menor dos dois e o caminho do
+        prejuizo, entao o padrao e o **maior**: o que sobrar de margem, sobra
+        de verdade. ``fonte_encargos`` permite escolher outra coisa.
 
-        A contrapartida do ML encolhe junto com o desconto: ao propor um preco
-        maior o motor assume que a ajuda diminui na mesma proporcao, o que
-        mantem a conta pessimista em vez de otimista.
+        A ajuda do ML nao entra aqui - ela so vale no preco que ele propos, e
+        quem cuida disso e ``ajuda_na_proposta``.
         """
-        base = custo.encargos(regras)
+        base = replace(custo.encargos(regras), rebate=ZERO)
         preco_proposto = para_decimal(self.ler(numero, "preco_sugerido"))
         recebe = _valor_monetario(self.ler(numero, "recebe"))
-        if preco_proposto is None or recebe is None or preco_proposto <= ZERO:
+        if preco_proposto is None or preco_proposto <= ZERO or recebe is None:
             return base
 
-        rebate = para_decimal(self.ler(numero, "rebate_ml")) or ZERO
-        encargos_reais = preco_proposto + rebate - recebe
-        if encargos_reais < ZERO:
+        pela_planilha = base.comissao_pct * preco_proposto + base.frete + base.taxa_fixa
+        ajuda = para_decimal(self.ler(numero, "rebate_ml")) or ZERO
+        pelo_ml = preco_proposto + ajuda - recebe
+        if pelo_ml < ZERO:
             return base
 
+        escolhido = _escolher_encargo(pela_planilha, pelo_ml, regras.fonte_encargos)
+
+        # Separa em parte percentual e parte fixa, para o encargo continuar
+        # valendo se o preco mudar.
         comissao = base.comissao_pct
-        frete = encargos_reais - comissao * preco_proposto
+        frete = escolhido - comissao * preco_proposto
         if frete < ZERO:
-            # Comissao anotada maior que a real: o ML manda, frete zera.
-            comissao = encargos_reais / preco_proposto
-            frete = ZERO
+            comissao, frete = escolhido / preco_proposto, ZERO
+        return replace(base, comissao_pct=comissao, frete=frete, taxa_fixa=ZERO)
 
-        preco_original = para_decimal(self.ler(numero, "preco_atual"))
-        inclinacao, credito = self._rebate_proporcional(rebate, preco_original, preco_proposto)
-        return replace(
-            base,
-            comissao_pct=comissao + inclinacao,
-            frete=frete,
-            taxa_fixa=ZERO,
-            rebate=credito,
-        )
+    def ajuda_na_proposta(self, numero: int, regras: Regras) -> Decimal:
+        """Reducao de tarifa do ML - vale so no preco que ele propos.
 
-    @staticmethod
-    def _rebate_proporcional(
-        rebate: Decimal, preco_original: Decimal | None, preco_proposto: Decimal
-    ) -> tuple[Decimal, Decimal]:
-        """Transforma o rebate variavel em (inclinacao, credito fixo).
-
-        Se a ajuda do ML cai junto com o desconto, ela vale
-        ``k * (preco_original - preco)``. Isso e linear no preco, entao entra no
-        modelo como um percentual a mais (``k``) e um credito fixo
-        (``k * preco_original``), sem precisar de calculo iterativo.
+        Extrapolar essa ajuda para outros precos foi o erro que deixou passar
+        desconto sem margem: num anuncio com R$ 1,06 de ajuda sobre um desconto
+        de R$ 21,39, a conta proporcional chegava a inventar R$ 10,60 de
+        credito. Fora do preco proposto, a ajuda vale zero.
         """
-        if rebate <= ZERO or preco_original is None:
-            return ZERO, rebate
-        desconto = preco_original - preco_proposto
-        if desconto <= ZERO:
-            return ZERO, rebate
-        inclinacao = rebate / desconto
-        return inclinacao, inclinacao * preco_original
+        if regras.ajuda_do_ml == "nunca":
+            return ZERO
+        return para_decimal(self.ler(numero, "rebate_ml")) or ZERO
 
     def contraproposta(self, numero: int, piso: Decimal, regras: Regras) -> Contraproposta | None:
         """Maior desconto inteiro cujo preco final ainda fica acima do piso.
@@ -306,6 +300,15 @@ class PerfilML(PerfilGenerico):
         idx_preco = self.mapa.get("preco_sugerido")
         if idx_preco is not None:
             self.tabela.escrever(numero, idx_preco, decisao.preco_aplicado)
+
+
+def _escolher_encargo(pela_planilha: Decimal, pelo_ml: Decimal, fonte: str) -> Decimal:
+    """Qual das duas medidas de comissao + frete vale para este anuncio."""
+    if fonte == "planilha" and pela_planilha > ZERO:
+        return pela_planilha
+    if fonte == "mercado_livre":
+        return pelo_ml
+    return max(pela_planilha, pelo_ml)
 
 
 def pct_desconto(base: Decimal | None, preco: Decimal) -> Decimal | None:

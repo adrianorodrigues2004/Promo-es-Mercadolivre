@@ -6,7 +6,10 @@
 # Na sua planilha de precificacao as colunas "Imposto", "Taxa", "Frete" e
 # "Ribait" ja preenchem isso anuncio a anuncio, e elas tem prioridade.
 imposto_pct: 11.5%        # imposto sobre a venda
-comissao_pct: 0%          # comissao do ML (a planilha traz: 11,5% ou 16,5%)
+comissao_pct: 16.5%       # comissao do ML quando a planilha nao disser qual e.
+                          # NUNCA deixe 0: comissao zerada por omissao ja fez o
+                          # programa aprovar desconto que dava prejuizo. 16,5% e
+                          # a tarifa Premium, a mais cara - suposicao segura.
 frete: 0                  # frete por sua conta, em reais
 taxa_fixa: 0              # custo fixo por venda, em reais
 
@@ -16,6 +19,22 @@ margem_min_pct: 5%              # margem minima sobre o preco de venda
 limiar_preco_baixo: 150         # abaixo deste preco vale tambem a regra em reais
 lucro_min_abaixo_limiar: 10     # lucro minimo, em reais, abaixo do limiar
 lucro_min_acima_limiar: 0       # lucro minimo, em reais, acima do limiar
+
+# --- De onde vem comissao + frete ------------------------------------------
+# Sua planilha e o Mercado Livre medem o mesmo encargo e discordam: nos dados
+# reais o ML apareceu mais barato em 24 de 35 anuncios. Ficar com o menor dos
+# dois e o caminho do prejuizo.
+#   mais_conservadora  fica com o maior dos dois (padrao)
+#   planilha           sempre as colunas Taxa e Frete da sua planilha
+#   mercado_livre      sempre a conta do "Você recebe"
+fonte_encargos: mais_conservadora
+
+# --- A ajuda do Mercado Livre ----------------------------------------------
+# A "Redução nas suas tarifas de venda" e dinheiro real, mas vale so no preco
+# que o ML propos. Se o programa mudar o preco, ela deixa de contar.
+#   apenas_na_proposta  conta no preco proposto, zero em qualquer outro (padrao)
+#   nunca               ignora essa ajuda - bate exatamente com a sua planilha
+ajuda_do_ml: apenas_na_proposta
 
 # --- Como negociar ---------------------------------------------------------
 # sugerido       aceita a proposta do ML quando ela cabe na margem; quando nao

@@ -5,9 +5,11 @@ from decimal import Decimal
 import pytest
 
 from promoml.precificacao import Encargos, avaliar, piso_de_preco, piso_por_lucro, piso_por_margem
-from promoml.regras import Regras
+from promoml.regras import regras_de_dict
 
-REGRAS = Regras()  # imposto 11,5%, margem 5%, R$ 10 abaixo de R$ 150
+# Comissao zerada de proposito: estes testes exercitam a aritmetica do piso, e
+# fixar a comissao aqui deixa as contas independentes do padrao das regras.
+REGRAS = regras_de_dict({"comissao_pct": "0%"})  # imposto 11,5%, margem 5%, R$ 10 abaixo de 150
 
 
 def encargos(custo, **extras):

@@ -7,7 +7,7 @@ existe, fica de fora com o motivo registrado.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from decimal import Decimal
 from pathlib import Path
 
@@ -25,6 +25,8 @@ COLUNAS_DIAGNOSTICO = (
     ("piso", "PROMO Piso R$"),
     ("lucro", "PROMO Lucro R$"),
     ("margem", "PROMO Margem %"),
+    ("encargos", "PROMO Comissao+Frete"),
+    ("ajuda", "PROMO Ajuda do ML"),
     ("custo_via", "PROMO Custo de"),
     ("motivo", "PROMO Motivo"),
 )
@@ -59,6 +61,8 @@ class Decisao:
     piso: Decimal | None = None
     custo: Decimal | None = None
     custo_via: str = ""
+    encargos_usados: Decimal | None = None
+    ajuda_ml: Decimal = ZERO
     preco_editavel: bool = True
     resultado: Resultado | None = None
 
@@ -240,29 +244,61 @@ def _decidir(perfil: PerfilGenerico, numero: int, custos: TabelaDeCustos, regras
         return decisao
 
     decisao.custo = custo.custo
+    regras_linha = custo.regras_aplicadas(regras)
+
+    # Dois conjuntos de encargos para o mesmo anuncio: a ajuda que o Mercado
+    # Livre oferece so existe no preco que ele propos. Em qualquer outro preco
+    # ela vale zero, entao a contraproposta e decidida sem contar com ela.
     encargos = perfil.encargos(numero, custo, regras)
-    piso = piso_de_preco(encargos, custo.regras_aplicadas(regras))
+    ajuda = perfil.ajuda_na_proposta(numero, regras)
+    encargos_proposta = replace(encargos, rebate=encargos.rebate + ajuda) if ajuda else encargos
+    decisao.ajuda_ml = ajuda
+
+    referencia = decisao.preco_proposto or decisao.preco_atual or ZERO
+    decisao.encargos_usados = centavos(
+        encargos.comissao_pct * referencia + encargos.frete + encargos.taxa_fixa
+    )
+
+    piso_campanha = para_decimal(perfil.ler(numero, "preco_min")) or ZERO
+    piso = piso_de_preco(encargos_proposta, regras_linha)
     if piso is None:
         decisao.motivo = INVIAVEL
         return decisao
-    decisao.piso = piso
+    decisao.piso = max(piso, piso_campanha)
 
-    proposta_serve = decisao.preco_proposto is not None and decisao.preco_proposto >= piso
+    proposta_serve = (
+        decisao.preco_proposto is not None and decisao.preco_proposto >= decisao.piso
+    )
     if proposta_serve and regras.estrategia != "maior_desconto":
-        return _aceitar(decisao, decisao.preco_proposto, decisao.desconto_proposto_pct, ACEITO, encargos)
+        return _aceitar(
+            decisao,
+            decisao.preco_proposto,
+            decisao.desconto_proposto_pct,
+            ACEITO,
+            encargos_proposta,
+            regras_linha,
+        )
     if regras.estrategia == "so_proposta" or not capacidade.pode_alterar_preco:
         decisao.motivo = SEM_MARGEM if capacidade.pode_alterar_preco else SEM_MARGEM_FIXO
         return decisao
 
-    alternativa = perfil.contraproposta(numero, piso, regras)
+    # Fora da proposta do ML o piso sobe: nao ha mais a ajuda dele bancando parte.
+    piso_proprio = piso_de_preco(encargos, regras_linha)
+    if piso_proprio is None:
+        decisao.motivo = INVIAVEL
+        return decisao
+    decisao.piso = max(piso_proprio, piso_campanha)
+
+    alternativa = perfil.contraproposta(numero, decisao.piso, regras)
     if alternativa is None:
         decisao.motivo = SEM_MARGEM
         return decisao
+    decisao.ajuda_ml = ZERO   # preco mudou: a ajuda do ML nao vale mais
     motivo = APROFUNDADO if proposta_serve else CONTRAPROPOSTA
     desconto = alternativa.desconto_pct
     if desconto is None:
         desconto = pct_desconto(decisao.preco_atual, alternativa.preco)
-    return _aceitar(decisao, alternativa.preco, desconto, motivo, encargos)
+    return _aceitar(decisao, alternativa.preco, desconto, motivo, encargos, regras_linha)
 
 
 def _buscar_custo(perfil, numero: int, decisao: Decisao, custos: TabelaDeCustos, regras: Regras):
@@ -279,13 +315,33 @@ def _buscar_custo(perfil, numero: int, decisao: Decisao, custos: TabelaDeCustos,
     return custo
 
 
-def _aceitar(decisao: Decisao, preco, desconto, motivo: str, encargos) -> Decisao:
+def _aceitar(decisao: Decisao, preco, desconto, motivo: str, encargos, regras: Regras) -> Decisao:
+    """Fecha a participacao - e confere a conta uma ultima vez antes de aceitar.
+
+    Rede de seguranca: qualquer caminho que chegue aqui com um preco que nao
+    cumpre a regra e recusado, em vez de virar promocao no prejuizo.
+    """
+    resultado = avaliar(preco, encargos)
+    if not _cumpre_a_regra(resultado, regras):
+        decisao.motivo = SEM_MARGEM
+        decisao.participar = False
+        decisao.preco_aplicado = None
+        return decisao
     decisao.participar = True
     decisao.preco_aplicado = centavos(preco)
     decisao.desconto_aplicado_pct = desconto
     decisao.motivo = motivo
-    decisao.resultado = avaliar(preco, encargos)
+    decisao.resultado = resultado
     return decisao
+
+
+def _cumpre_a_regra(resultado: Resultado, regras: Regras) -> bool:
+    """As duas regras de margem, conferidas no preco que sera praticado."""
+    if resultado.margem_pct < regras.margem_min_pct:
+        return False
+    if resultado.preco_efetivo < regras.limiar_preco_baixo:
+        return resultado.lucro >= regras.lucro_min_abaixo_limiar
+    return resultado.lucro >= regras.lucro_min_acima_limiar
 
 
 def _gravar_diagnostico(
@@ -305,6 +361,8 @@ def _gravar_diagnostico(
         "piso": decisao.piso,
         "lucro": decisao.lucro,
         "margem": centavos(decisao.margem_pct * 100) if decisao.margem_pct is not None else None,
+        "encargos": decisao.encargos_usados,
+        "ajuda": decisao.ajuda_ml if decisao.ajuda_ml > ZERO else None,
         "custo_via": decisao.custo_via,
         "motivo": decisao.motivo,
     }

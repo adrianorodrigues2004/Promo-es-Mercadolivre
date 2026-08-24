@@ -15,6 +15,12 @@ from .dinheiro import ARREDONDAMENTOS, ZERO, para_decimal, para_percentual
 # so_proposta    - nunca mexe no preco: so marca ou desmarca a participacao.
 ESTRATEGIAS = ("sugerido", "maior_desconto", "so_proposta")
 
+# De onde sai comissao + frete quando a planilha e o Mercado Livre discordam.
+FONTES_ENCARGOS = ("mais_conservadora", "planilha", "mercado_livre")
+
+# O que fazer com a "Redução nas suas tarifas de venda" oferecida pelo ML.
+AJUDAS_ML = ("apenas_na_proposta", "nunca")
+
 
 @dataclass(frozen=True)
 class Regras:
@@ -22,7 +28,10 @@ class Regras:
 
     # --- Encargos padrao (podem ser sobrescritos por produto na tabela de custos)
     imposto_pct: Decimal = Decimal("0.115")
-    comissao_pct: Decimal = ZERO
+    # Nunca zero: comissao zerada por omissao ja fez o programa aprovar
+    # desconto que dava prejuizo. 16,5% e a tarifa Premium - a mais cara, e
+    # portanto a suposicao segura quando a planilha nao diz qual e.
+    comissao_pct: Decimal = Decimal("0.165")
     taxa_fixa: Decimal = ZERO
     frete: Decimal = ZERO
 
@@ -34,6 +43,8 @@ class Regras:
 
     # --- Comportamento
     estrategia: str = "sugerido"
+    fonte_encargos: str = "mais_conservadora"
+    ajuda_do_ml: str = "apenas_na_proposta"
     # Menor desconto que vale a pena contrapropor. O padrao acompanha o piso
     # que o proprio Mercado Livre usa nas campanhas (3%): abaixo disso a oferta
     # tende a ser recusada e so suja o reenvio.
@@ -57,6 +68,14 @@ class Regras:
     def validar(self) -> None:
         if self.estrategia not in ESTRATEGIAS:
             raise ValueError(f"estrategia invalida: {self.estrategia!r} (use uma de {ESTRATEGIAS})")
+        if self.fonte_encargos not in FONTES_ENCARGOS:
+            raise ValueError(
+                f"fonte_encargos invalida: {self.fonte_encargos!r} (use uma de {FONTES_ENCARGOS})"
+            )
+        if self.ajuda_do_ml not in AJUDAS_ML:
+            raise ValueError(
+                f"ajuda_do_ml invalida: {self.ajuda_do_ml!r} (use uma de {AJUDAS_ML})"
+            )
         if self.arredondamento not in ARREDONDAMENTOS:
             raise ValueError(
                 f"arredondamento invalido: {self.arredondamento!r} "

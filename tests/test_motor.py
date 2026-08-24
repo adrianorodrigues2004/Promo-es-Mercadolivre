@@ -164,3 +164,67 @@ def test_resumo_soma_o_que_foi_decidido(rodada):
     assert s.lucro_previsto == sum(
         d.lucro for d in rodada.decisoes if d.participar
     )
+
+
+# --- Regressoes de um caso real: o programa aprovou desconto que dava prejuizo.
+
+def test_ajuda_do_ml_nao_e_extrapolada_para_outros_precos(promo_ml_xlsx, custos_xlsx):
+    """A redução de tarifa vale no preço proposto e em mais nenhum.
+
+    Extrapolar essa ajuda proporcionalmente inventava crédito: num anúncio com
+    R$ 1,06 de ajuda sobre R$ 21,39 de desconto, a conta chegava a R$ 10,60.
+    """
+    rodada = processar(promo_ml_xlsx, carregar_custos(custos_xlsx), Regras())
+    for decisao in rodada.decisoes:
+        if decisao.houve_contraproposta:
+            assert decisao.ajuda_ml == Decimal("0"), decisao.titulo
+            assert decisao.resultado.rebate == Decimal("0"), decisao.titulo
+
+
+def test_contraproposta_exige_margem_sem_a_ajuda_do_ml(promo_ml_xlsx, custos_xlsx):
+    """Fora da proposta, a margem tem de sair do preço sozinho."""
+    rodada = processar(promo_ml_xlsx, carregar_custos(custos_xlsx), Regras())
+    for decisao in rodada.decisoes:
+        if decisao.houve_contraproposta:
+            sem_ajuda = decisao.resultado.lucro
+            assert sem_ajuda / decisao.resultado.preco_efetivo >= Decimal("0.05")
+
+
+def test_encargos_ficam_com_a_medida_mais_cara(promo_ml_xlsx, custos_xlsx):
+    """Planilha e ML discordam sobre comissão + frete: vale o maior dos dois."""
+    custos = carregar_custos(custos_xlsx)
+    conservador = processar(promo_ml_xlsx, custos, Regras())
+    otimista = processar(promo_ml_xlsx, custos, regras_de_dict({"fonte_encargos": "mercado_livre"}))
+
+    pares = {d.id: d for d in otimista.decisoes}
+    for decisao in conservador.decisoes:
+        if decisao.encargos_usados is not None:
+            outro = pares[decisao.id].encargos_usados
+            assert decisao.encargos_usados >= outro, decisao.titulo
+
+
+def test_comissao_nunca_e_zero_por_omissao():
+    """Comissão zerada por omissão foi o que deixou passar desconto sem margem."""
+    assert Regras().comissao_pct > Decimal("0.10")
+
+
+def test_ajuda_do_ml_pode_ser_desligada(promo_ml_xlsx, custos_xlsx):
+    custos = carregar_custos(custos_xlsx)
+    com = processar(promo_ml_xlsx, custos, Regras())
+    sem = processar(promo_ml_xlsx, custos, regras_de_dict({"ajuda_do_ml": "nunca"}))
+    assert all(d.ajuda_ml == Decimal("0") for d in sem.decisoes)
+    assert sem.resumo.participando <= com.resumo.participando
+
+
+def test_nenhuma_participacao_escapa_da_regra(promo_ml_xlsx, custos_xlsx):
+    """Rede de segurança: o preço final é reconferido antes de aceitar."""
+    custos = carregar_custos(custos_xlsx)
+    for ajuste in ({}, {"estrategia": "maior_desconto"}, {"margem_min_pct": "25%"},
+                   {"fonte_encargos": "planilha"}, {"ajuda_do_ml": "nunca"}):
+        rodada = processar(promo_ml_xlsx, custos, regras_de_dict(ajuste))
+        for d in rodada.decisoes:
+            if not d.participar:
+                continue
+            assert d.margem_pct >= rodada.regras.margem_min_pct, (ajuste, d.titulo)
+            if d.resultado.preco_efetivo < rodada.regras.limiar_preco_baixo:
+                assert d.lucro >= rodada.regras.lucro_min_abaixo_limiar, (ajuste, d.titulo)

@@ -102,16 +102,20 @@ margem = lucro ÷ P
 linha contra ela (504 de 505 lucros idênticos ao centavo; o único diferente é
 arredondamento de meio centavo do Excel).
 
-**No export do Mercado Livre a conta fica ainda melhor.** A coluna
-*"Você recebe"* já é o líquido depois da comissão, do frete e da redução de
-tarifa. O programa usa esse número para calibrar os encargos reais de cada
-anúncio, em vez de depender do frete anotado à mão. Na sua planilha as duas
-contas ficaram a poucos reais de distância (mediana de R$ 3,63) — o valor do ML
-é o que vale.
+**Comissão e frete têm duas medidas, e elas discordam.** Sua planilha traz as
+colunas `Taxa` e `Frete`; o Mercado Livre traz a coluna *"Você recebe"*, de onde
+sai `comissão + frete` reais no preço proposto. Nos dados reais o ML apareceu
+**mais barato que a planilha em 24 de 35 anúncios** conferidos. Ficar com o
+menor dos dois é o caminho do prejuízo, então o padrão é o **maior**: o que
+sobrar de margem, sobra de verdade. Trocável em `fonte_encargos`.
 
-Quando o programa contrapropõe um desconto menor, ele assume que a ajuda do ML
-(*"Redução nas suas tarifas de venda"*) **encolhe junto**, na mesma proporção.
-É a hipótese pessimista: erra para menos, nunca para mais.
+**A ajuda do ML só vale no preço que ele propôs.** A *"Redução nas suas tarifas
+de venda"* é dinheiro real, mas some se o preço mudar. Quando o programa
+contrapropõe, ele calcula a margem **sem contar com ela**. Para ignorá-la
+sempre — e bater exatamente com a sua planilha — use `ajuda_do_ml: nunca`.
+
+Cada anúncio sai no relatório com as colunas `PROMO Comissao+Frete` e
+`PROMO Ajuda do ML`, para você conferir de onde veio cada número.
 
 ### Por que a regra dos R$ 10 tem esse cuidado
 
