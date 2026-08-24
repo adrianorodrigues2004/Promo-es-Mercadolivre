@@ -15,6 +15,7 @@ from pathlib import Path
 
 from flask import Flask, abort, redirect, render_template_string, request, send_file, url_for
 
+from . import __version__
 from .custos import PASTA_EXTRAS, carregar_custos, descobrir_tabelas
 from .motor import processar
 from .planilha import EXTENSOES_EXCEL, EXTENSOES_TEXTO, FormatoNaoSuportado
@@ -43,6 +44,7 @@ def criar_app(custos_padrao: Path, regras: Regras) -> Flask:
             "regras": regras,
             "pasta_extras": PASTA_EXTRAS,
             "guardados": guardados,
+            "versao": __version__,
             **extra,
         }
 
@@ -147,7 +149,13 @@ button{background:var(--acao);color:#fff;border:0;border-radius:9px;padding:12px
 font-size:15px;font-weight:600;cursor:pointer}
 button:hover{filter:brightness(1.08)}
 .erro{background:#fdecea;border:1px solid #f5c2bc;color:#8f2418;padding:12px 14px;border-radius:9px;margin-bottom:18px}
-.regras{font-size:13px;color:var(--suave);margin-top:16px;line-height:1.7}
+.regras{font-size:13px;color:var(--suave);margin-top:20px;line-height:1.6;
+border-top:1px solid var(--borda);padding-top:16px}
+.titulo-regras{font-weight:600;color:var(--texto);margin-bottom:8px}
+.tabela-regras{border-collapse:collapse;margin-bottom:10px}
+.tabela-regras td{padding:3px 0;vertical-align:top}
+.tabela-regras td:first-child{white-space:nowrap;padding-right:14px;color:var(--texto);font-weight:600}
+.tabela-regras strong{color:var(--texto)}
 .cartoes{display:flex;flex-wrap:wrap;gap:12px;margin:0 0 18px}
 .cartao{background:var(--carta);border:1px solid var(--borda);border-radius:10px;padding:12px 16px;min-width:150px}
 .cartao span{display:block;color:var(--suave);font-size:12px}
@@ -198,11 +206,25 @@ anuncio e devolve a planilha pronta para reenviar.</p>
 
   <button type="submit">Aplicar promocoes</button>
   <div class="regras">
-    Margem minima <strong>{{ '%.2f'|format(regras.margem_min_pct * 100) }}%</strong> &middot;
-    pelo menos <strong>R$ {{ '%.2f'|format(regras.lucro_min_abaixo_limiar) }}</strong> de lucro
-    abaixo de R$ {{ '%.2f'|format(regras.limiar_preco_baixo) }} &middot;
-    imposto {{ '%.2f'|format(regras.imposto_pct * 100) }}%<br>
-    Para mudar essas regras, edite <code>config/regras.yml</code>.
+    <div class="titulo-regras">Com o que estou contando</div>
+    <table class="tabela-regras">
+      <tr><td>Margem mínima</td>
+          <td><strong>{{ '%.2f'|format(regras.margem_min_pct * 100) }}%</strong>, e pelo menos
+          R$ {{ '%.2f'|format(regras.lucro_min_abaixo_limiar) }} de lucro abaixo de
+          R$ {{ '%.2f'|format(regras.limiar_preco_baixo) }}</td></tr>
+      <tr><td>Imposto</td><td>{{ '%.2f'|format(regras.imposto_pct * 100) }}% sobre a venda</td></tr>
+      <tr><td>Comissão do ML</td>
+          <td>{{ '%.2f'|format(regras.comissao_pct * 100) }}% quando sua planilha não disser qual é
+          (a coluna <code>Taxa</code> tem prioridade)</td></tr>
+      <tr><td>Comissão + frete</td>
+          <td>{% if regras.fonte_encargos == 'mais_conservadora' %}o maior valor entre a sua planilha
+          e a conta do Mercado Livre{% elif regras.fonte_encargos == 'planilha' %}sempre as colunas
+          Taxa e Frete da sua planilha{% else %}sempre a conta do “Você recebe”{% endif %}</td></tr>
+      <tr><td>Ajuda do ML</td>
+          <td>{% if regras.ajuda_do_ml == 'nunca' %}ignorada{% else %}conta só no preço que o ML
+          propôs; se eu mudar o preço, vale zero{% endif %}</td></tr>
+    </table>
+    Para mudar, edite <code>config/regras.yml</code>. &middot; versão {{ versao }}
   </div>
 </form>
 </div></body></html>"""

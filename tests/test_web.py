@@ -21,6 +21,21 @@ def test_pagina_inicial_mostra_as_regras_em_uso(cliente):
     assert "5.00%" in corpo and "R$ 10.00" in corpo
 
 
+def test_pagina_mostra_as_premissas_que_ja_causaram_prejuizo(cliente):
+    """Comissao, fonte dos encargos e ajuda do ML tem de estar visiveis.
+
+    Foi justamente o que ficou escondido quando o programa aprovou desconto
+    sem margem: nada na tela dizia que a comissao estava zerada.
+    """
+    from promoml import __version__
+
+    corpo = cliente.get("/").get_data(as_text=True)
+    assert "16.50%" in corpo                    # comissao suposta
+    assert "Comissão + frete" in corpo
+    assert "Ajuda do ML" in corpo
+    assert __version__ in corpo                 # da para saber se a copia esta velha
+
+
 def test_upload_processa_e_oferece_os_downloads(cliente, promo_ml_xlsx):
     with promo_ml_xlsx.open("rb") as arquivo:
         resposta = cliente.post(
